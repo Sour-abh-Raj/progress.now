@@ -1,4 +1,7 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+.env*.local
+.env.local
+.env
+!.env.example
 
 # dependencies
 /node_modules
@@ -12,30 +15,31 @@
 
 # testing
 /coverage
+/playwright-report
+/test-results
+/playwright/.cache
+*.log
 
 # next.js
 /.next/
 /out/
+*.tsbuildinfo
+next-env.d.ts
 
 # production
 /build
+/dist
 
 # misc
 .DS_Store
 *.pem
+.idea
+.vscode
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
+# local
 .vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts

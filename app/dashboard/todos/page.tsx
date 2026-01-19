@@ -1,0 +1,304 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { getTodos, createTodo, toggleTodoComplete, deleteTodo, type Todo } from '@/lib/actions/todos'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Badge } from '@/components/ui/badge'
+import { toast } from 'sonner'
+import { Plus, Trash2, Calendar } from 'lucide-react'
+
+export default function TodosPage() {
+    const [todos, setTodos] = useState<Todo[]>([])
+    const [loading, setLoading] = useState(true)
+    const [dialogOpen, setDialogOpen] = useState(false)
+    const [filter, setFilter] = useState<'all' | 'today' | 'week' | 'completed'>('all')
+
+    // Form state
+    const [title, setTitle] = useState('')
+    const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
+    const [dueDate, setDueDate] = useState('')
+
+    useEffect(() => {
+        loadTodos()
+    }, [])
+
+    const loadTodos = async () => {
+        try {
+            const data = await getTodos()
+            setTodos(data)
+        } catch (error) {
+            toast.error('Failed to load todos')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleCreate = async () => {
+        if (!title.trim()) {
+            toast.error('Please enter a title')
+            return
+        }
+
+        try {
+            await createTodo({
+                title: title.trim(),
+                priority,
+                due_date: dueDate || undefined,
+            })
+
+            toast.success('Todo created!')
+            setTitle('')
+            setPriority('medium')
+            setDueDate('')
+            setDialogOpen(false)
+            await loadTodos()
+        } catch (error) {
+            toast.error('Failed to create todo')
+        }
+    }
+
+    const handleToggle = async (id: string) => {
+        try {
+            await toggleTodoComplete(id)
+            await loadTodos()
+            toast.success('Todo updated!')
+        } catch (error) {
+            toast.error('Failed to update todo')
+        }
+    }
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this todo?')) return
+
+        try {
+            await deleteTodo(id)
+            toast.success('Todo deleted')
+            await loadTodos()
+        } catch (error) {
+            toast.error('Failed to delete todo')
+        }
+    }
+
+    const filteredTodos = todos.filter((todo) => {
+        const today = new Date().toISOString().split('T')[0]
+        const weekFromNow = new Date()
+        weekFromNow.setDate(weekFromNow.getDate() + 7)
+
+        switch (filter) {
+            case 'today':
+                return todo.due_date === today && !todo.completed
+            case 'week':
+                return (
+                    todo.due_date &&
+                    new Date(todo.due_date) <= weekFromNow &&
+                    !todo.completed
+                )
+            case 'completed':
+                return todo.completed
+            default:
+                return true
+        }
+    })
+
+    if (loading) {
+        return <div>Loading...</div>
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">TODOs</h1>
+                    <p className="text-muted-foreground">Manage your tasks and earn XP</p>
+                </div>
+                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button>
+                            <Plus className="mr-2 h-4 w-4" />
+                            New Todo
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Create New Todo</DialogTitle>
+                            <DialogDescription>
+                                Add a new task to your list. Complete it to earn XP!
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="title">Title</Label>
+                                <Input
+                                    id="title"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    placeholder="What needs to be done?"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="priority">Priority</Label>
+                                <Select
+                                    value={priority}
+                                    onValueChange={(value: 'low' | 'medium' | 'high') =>
+                                        setPriority(value)
+                                    }
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="low">Low (10 XP)</SelectItem>
+                                        <SelectItem value="medium">Medium (20 XP)</SelectItem>
+                                        <SelectItem value="high">High (30 XP)</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="due_date">Due Date (Optional)</Label>
+                                <Input
+                                    id="due_date"
+                                    type="date"
+                                    value={dueDate}
+                                    onChange={(e) => setDueDate(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button onClick={handleCreate}>Create</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            </div>
+
+            {/* Filters */}
+            <div className="flex gap-2">
+                <Button
+                    variant={filter === 'all' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setFilter('all')}
+                >
+                    All
+                </Button>
+                <Button
+                    variant={filter === 'today' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setFilter('today')}
+                >
+                    Today
+                </Button>
+                <Button
+                    variant={filter === 'week' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setFilter('week')}
+                >
+                    This Week
+                </Button>
+                <Button
+                    variant={filter === 'completed' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setFilter('completed')}
+                >
+                    Completed
+                </Button>
+            </div>
+
+            {/* Todos List */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>
+                        {filter === 'all' && 'All Todos'}
+                        {filter === 'today' && "Today's Todos"}
+                        {filter === 'week' && 'This Week'}
+                        {filter === 'completed' && 'Completed Todos'}
+                    </CardTitle>
+                    <CardDescription>
+                        {filteredTodos.length} {filteredTodos.length === 1 ? 'task' : 'tasks'}
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {filteredTodos.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8">
+                            No todos found. Create one to get started!
+                        </p>
+                    ) : (
+                        <div className="space-y-3">
+                            {filteredTodos.map((todo) => (
+                                <div
+                                    key={todo.id}
+                                    className="flex items-center justify-between border rounded-lg p-4 hover:bg-accent/50 transition-colors"
+                                >
+                                    <div className="flex items-center gap-4 flex-1">
+                                        <Checkbox
+                                            checked={todo.completed}
+                                            onCheckedChange={() => handleToggle(todo.id)}
+                                        />
+                                        <div className="flex-1">
+                                            <p
+                                                className={`font-medium ${todo.completed ? 'line-through text-muted-foreground' : ''
+                                                    }`}
+                                            >
+                                                {todo.title}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <Badge
+                                                    variant={
+                                                        todo.priority === 'high'
+                                                            ? 'destructive'
+                                                            : todo.priority === 'medium'
+                                                                ? 'default'
+                                                                : 'secondary'
+                                                    }
+                                                >
+                                                    {todo.priority}
+                                                </Badge>
+                                                {todo.due_date && (
+                                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                                        <Calendar className="h-3 w-3" />
+                                                        {new Date(todo.due_date).toLocaleDateString()}
+                                                    </span>
+                                                )}
+                                                <span className="text-xs text-muted-foreground">
+                                                    {todo.xp_reward} XP
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleDelete(todo.id)}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+    )
+}

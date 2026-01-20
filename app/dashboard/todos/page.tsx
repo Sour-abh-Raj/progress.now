@@ -126,10 +126,10 @@ export default function TodosPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">TODOs</h1>
-                    <p className="text-muted-foreground">Manage your tasks and earn XP</p>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">TODOs</h1>
+                    <p className="text-muted-foreground text-sm sm:text-base">Manage your tasks and earn XP</p>
                 </div>
                 <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                     <DialogTrigger asChild>
@@ -193,8 +193,8 @@ export default function TodosPage() {
                 </Dialog>
             </div>
 
-            {/* Filters */}
-            <div className="flex gap-2">
+            {/* Filters - Scrollable on mobile */}
+            <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0">
                 <Button
                     variant={filter === 'all' ? 'default' : 'outline'}
                     size="sm"
@@ -248,21 +248,22 @@ export default function TodosPage() {
                             {filteredTodos.map((todo) => (
                                 <div
                                     key={todo.id}
-                                    className="flex items-center justify-between border rounded-lg p-4 hover:bg-accent/50 transition-colors"
+                                    className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 border rounded-lg p-4 hover:bg-accent/50 transition-colors"
                                 >
-                                    <div className="flex items-center gap-4 flex-1">
+                                    <div className="flex items-start sm:items-center gap-3 sm:gap-4 flex-1 w-full">
                                         <Checkbox
                                             checked={todo.completed}
                                             onCheckedChange={() => handleToggle(todo.id)}
+                                            className="mt-1 sm:mt-0"
                                         />
-                                        <div className="flex-1">
+                                        <div className="flex-1 min-w-0">
                                             <p
-                                                className={`font-medium ${todo.completed ? 'line-through text-muted-foreground' : ''
+                                                className={`font-medium break-words ${todo.completed ? 'line-through text-muted-foreground' : ''
                                                     }`}
                                             >
                                                 {todo.title}
                                             </p>
-                                            <div className="flex items-center gap-2 mt-1">
+                                            <div className="flex flex-wrap items-center gap-2 mt-2">
                                                 <Badge
                                                     variant={
                                                         todo.priority === 'high'
@@ -290,6 +291,7 @@ export default function TodosPage() {
                                         variant="ghost"
                                         size="icon"
                                         onClick={() => handleDelete(todo.id)}
+                                        className="self-end sm:self-auto"
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </Button>

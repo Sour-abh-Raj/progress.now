@@ -60,8 +60,8 @@ export default function SignupPage() {
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
             <Card className="w-full max-w-md">
                 <CardHeader className="text-center">
-                    <CardTitle className="text-3xl font-bold">Join Progress Now</CardTitle>
-                    <CardDescription>
+                    <CardTitle className="text-2xl sm:text-3xl font-bold">Join progress.now</CardTitle>
+                    <CardDescription className="text-sm">
                         Start tracking your productivity journey
                     </CardDescription>
                 </CardHeader>

@@ -50,16 +50,16 @@ export default async function DashboardPage() {
         <div className="space-y-8">
             {/* Hero Section */}
             <div>
-                <h1 className="text-4xl font-bold tracking-tight">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight">
                     Welcome back! 👋
                 </h1>
-                <p className="text-muted-foreground mt-2">
+                <p className="text-muted-foreground mt-2 text-sm sm:text-base">
                     Here's your productivity overview
                 </p>
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {/* Stats Grid - Single column on mobile, 2 cols on tablet, 4 on desktop */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Level</CardTitle>

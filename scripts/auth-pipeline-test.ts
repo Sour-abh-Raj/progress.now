@@ -133,10 +133,10 @@ async function productionAuthPipelineTest() {
     console.log('🛠️  Phase 3: Admin Email Confirmation')
     console.log('-'.repeat(70))
 
-    // Use Admin API to confirm email
+    // Use Admin API to confirm email - use email_confirm attribute
     const { data: confirmedUser, error: confirmError } = await adminClient.auth.admin.updateUserById(
         userId,
-        { email_confirmed_at: new Date().toISOString() }
+        { email_confirm: true }
     )
 
     if (confirmError || !confirmedUser) {
@@ -152,9 +152,32 @@ async function productionAuthPipelineTest() {
     results.push({
         name: 'Admin Email Confirmation',
         passed: true,
-        details: `Email confirmed at: ${confirmedUser.user.email_confirmed_at}`
+        details: `Email confirmed via Admin API`
     })
     logStep(results[results.length - 1])
+
+    // Wait for confirmation to propagate
+    console.log('   ⏳ Waiting for confirmation to propagate...')
+    await new Promise(resolve => setTimeout(resolve, 2000))
+
+    // Verify confirmation by refetching user
+    const { data: verifyUser, error: verifyError } = await adminClient.auth.admin.getUserById(userId)
+
+    if (verifyError || !verifyUser.user.email_confirmed_at) {
+        results.push({
+            name: 'Email Confirmation Verified',
+            passed: false,
+            error: verifyError?.message || 'Confirmation not reflected in user record'
+        })
+        logStep(results[results.length - 1])
+    } else {
+        results.push({
+            name: 'Email Confirmation Verified',
+            passed: true,
+            details: `Confirmed at: ${verifyUser.user.email_confirmed_at}`
+        })
+        logStep(results[results.length - 1])
+    }
     console.log('')
 
     // ============================================================

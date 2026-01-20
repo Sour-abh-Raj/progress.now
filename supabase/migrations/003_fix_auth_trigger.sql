@@ -7,7 +7,7 @@
 
 -- Drop existing trigger and function
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-DROP FUNCTION IF EXISTS handle_new_user();
+DROP FUNCTION IF EXISTS public.handle_new_user();
 
 -- Create hardened trigger function with explicit schema references and error handling
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -51,9 +51,6 @@ CREATE TRIGGER on_auth_user_created
 -- ============================================================================
 
 -- Drop existing INSERT policies for users_profile and gamification_stats
--- We need to allow both authenticated users AND the trigger (service role)
-
--- Users Profile - Allow inserts from both trigger and users themselves
 DROP POLICY IF EXISTS "Users can insert own profile" ON public.users_profile;
 DROP POLICY IF EXISTS "Allow trigger inserts" ON public.users_profile;
 
@@ -64,7 +61,6 @@ CREATE POLICY "Users can insert own profile"
     auth.uid() = id OR auth.role() = 'service_role'
   );
 
--- Gamification Stats - Allow inserts from trigger only
 DROP POLICY IF EXISTS "Users can insert own stats" ON public.gamification_stats;
 DROP POLICY IF EXISTS "Allow trigger inserts for stats" ON public.gamification_stats;
 
@@ -78,32 +74,80 @@ CREATE POLICY "Allow gamification stats creation"
 -- PART 3: Ensure all columns have proper defaults or are nullable
 -- ============================================================================
 
--- Users profile - ensure nullable fields are properly set
-ALTER TABLE public.users_profile
-  ALTER COLUMN display_name DROP NOT NULL IF EXISTS;
+-- Make display_name nullable if the column exists
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'users_profile'
+      AND column_name = 'display_name'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.users_profile ALTER COLUMN display_name DROP NOT NULL';
+  END IF;
+END;
+$$;
 
-ALTER TABLE public.users_profile
-  ALTER COLUMN avatar_url DROP NOT NULL IF EXISTS;
+-- Make avatar_url nullable if the column exists
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'users_profile'
+      AND column_name = 'avatar_url'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.users_profile ALTER COLUMN avatar_url DROP NOT NULL';
+  END IF;
+END;
+$$;
 
--- Gamification stats - ensure all fields have defaults
-ALTER TABLE public.gamification_stats
-  ALTER COLUMN total_xp SET DEFAULT 0;
+-- Set defaults on gamification_stats columns if they exist
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'gamification_stats'
+      AND column_name = 'total_xp'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.gamification_stats ALTER COLUMN total_xp SET DEFAULT 0';
+  END IF;
 
-ALTER TABLE public.gamification_stats
-  ALTER COLUMN level SET DEFAULT 1;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'gamification_stats'
+      AND column_name = 'level'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.gamification_stats ALTER COLUMN level SET DEFAULT 1';
+  END IF;
 
-ALTER TABLE public.gamification_stats
-  ALTER COLUMN current_streak SET DEFAULT 0;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'gamification_stats'
+      AND column_name = 'current_streak'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.gamification_stats ALTER COLUMN current_streak SET DEFAULT 0';
+  END IF;
 
-ALTER TABLE public.gamification_stats
-  ALTER COLUMN longest_streak SET DEFAULT 0;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'gamification_stats'
+      AND column_name = 'longest_streak'
+  ) THEN
+    EXECUTE 'ALTER TABLE public.gamification_stats ALTER COLUMN longest_streak SET DEFAULT 0';
+  END IF;
+END;
+$$;
 
 -- ============================================================================
 -- PART 4: Add helpful indexes for auth queries
 -- ============================================================================
-
--- Index on users_profile(id) for fast lookups (may already exist as PRIMARY KEY)
--- Index on gamification_stats(user_id) for fast lookups (may already exist)
 
 -- Ensure we have index on gamification_stats.user_id
 CREATE INDEX IF NOT EXISTS idx_gamification_stats_user_id 

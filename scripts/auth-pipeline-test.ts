@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 interface TestStep {
     name: string
@@ -24,27 +25,39 @@ function logStep(step: TestStep) {
     }
 }
 
-async function authPipelineTest() {
-    console.log('🔐 Supabase-Native Auth Pipeline Test')
+async function productionAuthPipelineTest() {
+    console.log('🔐 Production-Grade Supabase Auth Pipeline Test')
     console.log('='.repeat(70))
     console.log('')
-    console.log('Testing: Signup → Profile Creation → Login → Data Access')
+    console.log('Configuration: Email confirmation ENABLED (production mode)')
+    console.log('Testing: Signup → Admin Confirm → Login → Data → Logout')
     console.log('')
 
-    // Use anon key (client-side simulation)
+    // Client for user operations (anon key)
     const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-    // Generate unique test credentials
-    const testEmail = `test.${Date.now()}@progressnow.local`
-    const testPassword = 'SecureTestPass123!'
+    // Admin client for email confirmation (service role)
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    })
+
+    // Use Gmail + addressing for RFC-valid deliverable email
+    // Format: test+timestamp@gmail.com
+    const timestamp = Date.now()
+    const testEmail = `progressnowtest+${timestamp}@gmail.com`
+    const testPassword = 'SecureTestPass123!@#'
 
     console.log(`📧 Test Email: ${testEmail}`)
+    console.log(`🔐 Test Password: ${testPassword}`)
     console.log('')
 
     // ============================================================
-    // PHASE 1: SIGNUP
+    // PHASE 1: SIGNUP WITH UNCONFIRMED EMAIL
     // ============================================================
-    console.log('📝 Phase 1: User Signup')
+    console.log('📝 Phase 1: User Signup (Unconfirmed)')
     console.log('-'.repeat(70))
 
     const { data: signupData, error: signupError } = await supabase.auth.signUp({
@@ -60,8 +73,7 @@ async function authPipelineTest() {
         })
         logStep(results[results.length - 1])
         console.log('')
-        console.log('⚠️  Signup failed. Check Supabase email settings.')
-        console.log('   Ensure email confirmation is DISABLED for testing.')
+        console.log('❌ Signup failed. Check error above.')
         process.exit(1)
     }
 
@@ -69,88 +81,123 @@ async function authPipelineTest() {
         results.push({
             name: 'User Signup',
             passed: false,
-            error: 'No user returned from signup'
+            error: 'No user returned'
+        })
+        logStep(results[results.length - 1])
+        process.exit(1)
+    }
+
+    const userId = signupData.user.id
+
+    results.push({
+        name: 'User Signup',
+        passed: true,
+        details: `User ID: ${userId}`
+    })
+    logStep(results[results.length - 1])
+
+    results.push({
+        name: 'Email Confirmation Pending',
+        passed: !signupData.user.email_confirmed_at,
+        details: signupData.user.email_confirmed_at ? 'Already confirmed' : 'Awaiting confirmation'
+    })
+    logStep(results[results.length - 1])
+    console.log('')
+
+    // ============================================================
+    // PHASE 2: VERIFY UNCONFIRMED USER CANNOT LOGIN
+    // ============================================================
+    console.log('🔒 Phase 2: Negative Test (Unconfirmed User Login)')
+    console.log('-'.repeat(70))
+
+    const { data: unconfirmedLogin, error: unconfirmedError } = await supabase.auth.signInWithPassword({
+        email: testEmail,
+        password: testPassword
+    })
+
+    const shouldBlockUnconfirmed = !!unconfirmedError && unconfirmedError.message.includes('Email not confirmed')
+
+    results.push({
+        name: 'Block Unconfirmed User Login',
+        passed: shouldBlockUnconfirmed,
+        details: shouldBlockUnconfirmed
+            ? 'Correctly blocked unconfirmed user'
+            : 'Security issue: Unconfirmed user can login!'
+    })
+    logStep(results[results.length - 1])
+    console.log('')
+
+    // ============================================================
+    // PHASE 3: ADMIN EMAIL CONFIRMATION
+    // ============================================================
+    console.log('🛠️  Phase 3: Admin Email Confirmation')
+    console.log('-'.repeat(70))
+
+    // Use Admin API to confirm email
+    const { data: confirmedUser, error: confirmError } = await adminClient.auth.admin.updateUserById(
+        userId,
+        { email_confirmed_at: new Date().toISOString() }
+    )
+
+    if (confirmError || !confirmedUser) {
+        results.push({
+            name: 'Admin Email Confirmation',
+            passed: false,
+            error: confirmError?.message || 'Failed to confirm email'
         })
         logStep(results[results.length - 1])
         process.exit(1)
     }
 
     results.push({
-        name: 'User Signup',
+        name: 'Admin Email Confirmation',
         passed: true,
-        details: `User ID: ${signupData.user.id}`
-    })
-    logStep(results[results.length - 1])
-
-    // Check if session was returned
-    const hasSession = !!signupData.session
-    results.push({
-        name: 'Session Created on Signup',
-        passed: hasSession,
-        details: hasSession ? 'Session active' : 'Email confirmation required'
+        details: `Email confirmed at: ${confirmedUser.user.email_confirmed_at}`
     })
     logStep(results[results.length - 1])
     console.log('')
 
     // ============================================================
-    // PHASE 2: VERIFY AUTO-CREATED RECORDS
+    // PHASE 4: VERIFY DATABASE TRIGGERS
     // ============================================================
-    console.log('🗄️  Phase 2: Database Trigger Verification')
+    console.log('🗄️  Phase 4: Database Trigger Verification')
     console.log('-'.repeat(70))
 
-    const userId = signupData.user.id
-
-    // Check profile
-    const { data: profile, error: profileError } = await supabase
+    // Check profile (using admin client to bypass RLS for verification)
+    const { data: profile, error: profileError } = await adminClient
         .from('users_profile')
         .select('*')
         .eq('id', userId)
         .single()
 
-    if (profileError || !profile) {
-        results.push({
-            name: 'Profile Auto-Creation',
-            passed: false,
-            error: profileError?.message || 'Profile not found'
-        })
-        logStep(results[results.length - 1])
-    } else {
-        results.push({
-            name: 'Profile Auto-Creation',
-            passed: true,
-            details: 'Trigger successfully created profile'
-        })
-        logStep(results[results.length - 1])
-    }
+    results.push({
+        name: 'Profile Auto-Creation',
+        passed: !profileError && !!profile,
+        details: profile ? 'Trigger created profile' : undefined,
+        error: profileError?.message
+    })
+    logStep(results[results.length - 1])
 
     // Check gamification stats
-    const { data: stats, error: statsError } = await supabase
+    const { data: stats, error: statsError } = await adminClient
         .from('gamification_stats')
         .select('*')
         .eq('user_id', userId)
         .single()
 
-    if (statsError || !stats) {
-        results.push({
-            name: 'Gamification Stats Auto-Creation',
-            passed: false,
-            error: statsError?.message || 'Stats not found'
-        })
-        logStep(results[results.length - 1])
-    } else {
-        results.push({
-            name: 'Gamification Stats Auto-Creation',
-            passed: true,
-            details: `Level: ${stats.level}, XP: ${stats.total_xp}`
-        })
-        logStep(results[results.length - 1])
-    }
+    results.push({
+        name: 'Gamification Stats Auto-Creation',
+        passed: !statsError && !!stats,
+        details: stats ? `Level: ${stats.level}, XP: ${stats.total_xp}` : undefined,
+        error: statsError?.message
+    })
+    logStep(results[results.length - 1])
     console.log('')
 
     // ============================================================
-    // PHASE 3: LOGIN TEST
+    // PHASE 5: CONFIRMED USER LOGIN
     // ============================================================
-    console.log('🔑 Phase 3: Login Flow')
+    console.log('🔑 Phase 5: Confirmed User Login')
     console.log('-'.repeat(70))
 
     const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
@@ -158,54 +205,35 @@ async function authPipelineTest() {
         password: testPassword
     })
 
-    if (loginError) {
-        if (loginError.message.includes('Email not confirmed')) {
-            results.push({
-                name: 'User Login',
-                passed: true,
-                details: 'Email confirmation required (expected in some configs)'
-            })
-            logStep(results[results.length - 1])
-            console.log('')
-            console.log('⚠️  Email confirmation is enabled.')
-            console.log('   For automated testing, disable in Supabase Dashboard.')
-        } else {
-            results.push({
-                name: 'User Login',
-                passed: false,
-                error: loginError.message
-            })
-            logStep(results[results.length - 1])
-        }
-    } else if (!loginData.session) {
+    if (loginError || !loginData.session) {
         results.push({
-            name: 'User Login',
+            name: 'Confirmed User Login',
             passed: false,
-            error: 'No session returned'
+            error: loginError?.message || 'No session returned'
         })
         logStep(results[results.length - 1])
-    } else {
-        results.push({
-            name: 'User Login',
-            passed: true,
-            details: 'Session established'
-        })
-        logStep(results[results.length - 1])
-
-        // Verify access token
-        results.push({
-            name: 'Access Token Present',
-            passed: !!loginData.session.access_token,
-            details: loginData.session.access_token ? 'Token valid' : 'No token'
-        })
-        logStep(results[results.length - 1])
+        process.exit(1)
     }
+
+    results.push({
+        name: 'Confirmed User Login',
+        passed: true,
+        details: 'Session established'
+    })
+    logStep(results[results.length - 1])
+
+    results.push({
+        name: 'Access Token Present',
+        passed: !!loginData.session.access_token,
+        details: loginData.session.access_token ? 'Token valid' : 'No token'
+    })
+    logStep(results[results.length - 1])
     console.log('')
 
     // ============================================================
-    // PHASE 4: DATA CRUD TEST
+    // PHASE 6: PROTECTED DATA ACCESS (RLS)
     // ============================================================
-    console.log('📊 Phase 4: Protected Data Access (RLS)')
+    console.log('📊 Phase 6: Protected Data Access (RLS Validation)')
     console.log('-'.repeat(70))
 
     // Create TODO
@@ -213,48 +241,87 @@ async function authPipelineTest() {
         .from('todos')
         .insert({
             user_id: userId,
-            title: 'Auth Pipeline Test TODO',
+            title: 'Production Auth Test TODO',
             priority: 'high',
             xp_reward: 30
         })
         .select()
         .single()
 
-    if (todoError || !todo) {
-        results.push({
-            name: 'Create TODO',
-            passed: false,
-            error: todoError?.message || 'TODO not created'
-        })
-        logStep(results[results.length - 1])
-    } else {
-        results.push({
-            name: 'Create TODO',
-            passed: true,
-            details: `TODO ID: ${todo.id}`
-        })
-        logStep(results[results.length - 1])
-    }
+    results.push({
+        name: 'Create TODO (INSERT)',
+        passed: !todoError && !!todo,
+        details: todo ? `TODO ID: ${todo.id}` : undefined,
+        error: todoError?.message
+    })
+    logStep(results[results.length - 1])
 
-    // Read TODO
+    // Read TODOs (RLS should allow only own data)
     const { data: todos, error: readError } = await supabase
         .from('todos')
         .select('*')
         .eq('user_id', userId)
 
     results.push({
-        name: 'Read TODOs (RLS Check)',
+        name: 'Read TODOs (SELECT + RLS)',
         passed: !readError && (todos?.length ?? 0) > 0,
         details: !readError ? `Found ${todos?.length ?? 0} todo(s)` : undefined,
         error: readError?.message
     })
     logStep(results[results.length - 1])
+
+    // Create Project
+    const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .insert({
+            user_id: userId,
+            title: 'Production Auth Test Project',
+            status: 'ongoing',
+            xp_reward: 100
+        })
+        .select()
+        .single()
+
+    results.push({
+        name: 'Create Project (INSERT)',
+        passed: !projectError && !!project,
+        details: project ? `Project ID: ${project.id}` : undefined,
+        error: projectError?.message
+    })
+    logStep(results[results.length - 1])
     console.log('')
 
     // ============================================================
-    // PHASE 5: LOGOUT
+    // PHASE 7: SESSION VERIFICATION
     // ============================================================
-    console.log('🚪 Phase 5: Logout')
+    console.log('🔐 Phase 7: Session Verification')
+    console.log('-'.repeat(70))
+
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+    results.push({
+        name: 'Session Persistence',
+        passed: !sessionError && !!session,
+        details: session ? 'Session active and valid' : undefined,
+        error: sessionError?.message
+    })
+    logStep(results[results.length - 1])
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+
+    results.push({
+        name: 'User Data Retrieval',
+        passed: !userError && !!user && user.id === userId,
+        details: user ? `User ID matches: ${user.id === userId}` : undefined,
+        error: userError?.message
+    })
+    logStep(results[results.length - 1])
+    console.log('')
+
+    // ============================================================
+    // PHASE 8: LOGOUT
+    // ============================================================
+    console.log('🚪 Phase 8: Logout')
     console.log('-'.repeat(70))
 
     const { error: logoutError } = await supabase.auth.signOut()
@@ -262,7 +329,7 @@ async function authPipelineTest() {
     results.push({
         name: 'User Logout',
         passed: !logoutError,
-        details: !logoutError ? 'Session ended' : undefined,
+        details: !logoutError ? 'Session terminated' : undefined,
         error: logoutError?.message
     })
     logStep(results[results.length - 1])
@@ -300,32 +367,36 @@ async function authPipelineTest() {
 
     if (failed === 0) {
         console.log('')
-        console.log('🎉 Supabase-native authentication pipeline fully verified!')
-        console.log('✅ All core auth flows operational')
+        console.log('🎉 Supabase production auth test pipeline operational with email confirmation enabled.')
         console.log('')
-        console.log('Components Validated:')
-        console.log('  • Email/password signup')
+        console.log('✅ All production auth flows validated:')
+        console.log('  • RFC-valid email signup')
+        console.log('  • Email confirmation enforcement')
+        console.log('  • Admin API email confirmation')
         console.log('  • Database triggers (profile + stats)')
-        console.log('  • Email/password login')
+        console.log('  • Confirmed user login')
         console.log('  • Session management')
-        console.log('  • RLS-protected data access')
+        console.log('  • RLS-protected data access (CRUD)')
+        console.log('  • Negative security tests (unconfirmed blocked)')
         console.log('  • Logout flow')
+        console.log('')
+        console.log('System Status: Production-ready with email confirmation')
         console.log('')
         process.exit(0)
     } else {
         console.log('')
         console.log('⚠️  Some tests failed')
         console.log('Review errors above and check:')
-        console.log('  1. Supabase email settings (confirmation disabled?)')
-        console.log('  2. Database migrations applied?')
-        console.log('  3. RLS policies enabled?')
+        console.log('  1. Database migrations applied?')
+        console.log('  2. RLS policies enabled?')
+        console.log('  3. Admin API accessible?')
         console.log('')
         process.exit(1)
     }
 }
 
-authPipelineTest().catch((error) => {
-    console.error('\n💥 Auth pipeline test crashed:', error.message)
+productionAuthPipelineTest().catch((error) => {
+    console.error('\n💥 Production auth pipeline test crashed:', error.message)
     console.error(error.stack)
     process.exit(1)
 })

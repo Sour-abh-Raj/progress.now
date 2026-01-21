@@ -1,34 +1,25 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { getTodos } from '@/lib/actions/todos'
-import { getProjects } from '@/lib/actions/projects'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { getProgressToNextLevel } from '@/lib/gamification/xp-calculator'
 import { calculateWeeklyScore } from '@/lib/gamification/streak-tracker'
 import { Trophy, Flame, CheckCircle2, Target } from 'lucide-react'
+import { getCurrentUser, getGamificationStats, getCachedTodos, getCachedProjects } from '@/lib/data/cached-queries'
 
 export default async function DashboardPage() {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
+    const user = await getCurrentUser()
 
     if (!user) {
         redirect('/auth/login')
     }
 
-    // Fetch gamification stats
-    const { data: stats } = await supabase
-        .from('gamification_stats')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
-
-    // Fetch todos and projects
-    const todos = await getTodos()
-    const projects = await getProjects()
+    // Fetch data using cached queries (deduplicates within request)
+    const [stats, todos, projects] = await Promise.all([
+        getGamificationStats(user.id),
+        getCachedTodos(user.id),
+        getCachedProjects(user.id),
+    ])
 
     // Calculate stats
     const todosToday = todos.filter((t) => {

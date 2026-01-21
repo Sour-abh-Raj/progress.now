@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { calculateTaskXP } from '@/lib/gamification/xp-calculator'
 import { calculateLevel } from '@/lib/gamification/xp-calculator'
 import { updateStreak } from '@/lib/gamification/streak-tracker'
+import { getCurrentUser, getCachedTodos } from '@/lib/data/cached-queries'
 
 export type Todo = {
     id: string
@@ -21,21 +22,9 @@ export type Todo = {
 }
 
 export async function getTodos() {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
-
-    const { data, error } = await supabase
-        .from('todos')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-    if (error) throw new Error(error.message)
-    return data as Todo[]
+    return getCachedTodos(user.id)
 }
 
 export async function createTodo(formData: {
@@ -44,12 +33,10 @@ export async function createTodo(formData: {
     due_date?: string
     recurring?: boolean
 }) {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
+    
+    const supabase = await createClient()
 
     const xpReward = calculateTaskXP(formData.priority)
 
@@ -75,12 +62,10 @@ export async function createTodo(formData: {
 }
 
 export async function updateTodo(id: string, updates: Partial<Todo>) {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
+    
+    const supabase = await createClient()
 
     const { data, error } = await supabase
         .from('todos')
@@ -98,12 +83,10 @@ export async function updateTodo(id: string, updates: Partial<Todo>) {
 }
 
 export async function toggleTodoComplete(id: string) {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
+    
+    const supabase = await createClient()
 
     // Get current todo
     const { data: todo, error: fetchError } = await supabase
@@ -177,12 +160,10 @@ export async function toggleTodoComplete(id: string) {
 }
 
 export async function deleteTodo(id: string) {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
+    
+    const supabase = await createClient()
 
     const { error } = await supabase
         .from('todos')

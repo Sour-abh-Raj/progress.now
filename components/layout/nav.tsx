@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/theme-toggle'
 import {
@@ -17,19 +18,23 @@ import {
     X,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
+import { prefetchTodos, TODOS_QUERY_KEY } from '@/lib/hooks/use-todos'
+import { prefetchProjects, PROJECTS_QUERY_KEY } from '@/lib/hooks/use-projects'
+import { prefetchResearch, RESEARCH_QUERY_KEY } from '@/lib/hooks/use-research'
 
 const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'TODOs', href: '/dashboard/todos', icon: CheckSquare },
-    { name: 'Projects', href: '/dashboard/projects', icon: FolderKanban },
-    { name: 'Research', href: '/dashboard/research', icon: Lightbulb },
-    { name: 'Settings', href: '/dashboard/settings', icon: Settings },
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, queryKey: null },
+    { name: 'TODOs', href: '/dashboard/todos', icon: CheckSquare, queryKey: TODOS_QUERY_KEY },
+    { name: 'Projects', href: '/dashboard/projects', icon: FolderKanban, queryKey: PROJECTS_QUERY_KEY },
+    { name: 'Research', href: '/dashboard/research', icon: Lightbulb, queryKey: RESEARCH_QUERY_KEY },
+    { name: 'Settings', href: '/dashboard/settings', icon: Settings, queryKey: null },
 ]
 
 export function DashboardNav() {
     const pathname = usePathname()
     const router = useRouter()
+    const queryClient = useQueryClient()
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
     const handleLogout = async () => {
@@ -40,6 +45,8 @@ export function DashboardNav() {
             toast.error('Logout failed', { description: error.message })
         } else {
             toast.success('Logged out successfully')
+            // Clear all cached data on logout
+            queryClient.clear()
             router.push('/auth/login')
             router.refresh()
         }
@@ -48,6 +55,21 @@ export function DashboardNav() {
     const closeMobileMenu = () => {
         setMobileMenuOpen(false)
     }
+
+    // Prefetch data on hover for instant navigation
+    const handlePrefetch = useCallback((href: string) => {
+        switch (href) {
+            case '/dashboard/todos':
+                prefetchTodos(queryClient)
+                break
+            case '/dashboard/projects':
+                prefetchProjects(queryClient)
+                break
+            case '/dashboard/research':
+                prefetchResearch(queryClient)
+                break
+        }
+    }, [queryClient])
 
     return (
         <>
@@ -70,6 +92,8 @@ export function DashboardNav() {
                                         <Link
                                             key={item.name}
                                             href={item.href}
+                                            onMouseEnter={() => handlePrefetch(item.href)}
+                                            onFocus={() => handlePrefetch(item.href)}
                                             className={`inline-flex items-center gap-2 border-b-2 px-1 pt-1 text-sm font-medium transition-colors ${isActive
                                                     ? 'border-primary text-foreground'
                                                     : 'border-transparent text-muted-foreground hover:border-gray-300 hover:text-foreground'
@@ -162,6 +186,7 @@ export function DashboardNav() {
                             <Link
                                 key={item.name}
                                 href={item.href}
+                                onTouchStart={() => handlePrefetch(item.href)}
                                 aria-current={isActive ? 'page' : undefined}
                                 className={`flex flex-col items-center justify-center gap-1 transition-colors min-h-[44px] ${isActive
                                         ? 'text-primary'

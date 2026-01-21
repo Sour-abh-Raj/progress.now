@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { getResearchIdeas, createResearchIdea, deleteResearchIdea, type ResearchIdea } from '@/lib/actions/research'
+import { useState } from 'react'
+import { type ResearchIdea } from '@/lib/actions/research'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,70 +16,46 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { Plus, Trash2, Lightbulb } from 'lucide-react'
+import { ResearchListSkeleton } from '@/components/skeletons/research-skeleton'
+import { useResearch, useCreateResearch, useDeleteResearch } from '@/lib/hooks/use-research'
 
 export default function ResearchPage() {
-    const [ideas, setIdeas] = useState<ResearchIdea[]>([])
-    const [loading, setLoading] = useState(true)
+    const { data: ideas = [], isLoading } = useResearch()
+    const createResearchMutation = useCreateResearch()
+    const deleteResearchMutation = useDeleteResearch()
+    
     const [dialogOpen, setDialogOpen] = useState(false)
 
     // Form state
     const [title, setTitle] = useState('')
     const [notes, setNotes] = useState('')
 
-    useEffect(() => {
-        loadIdeas()
-    }, [])
-
-    const loadIdeas = async () => {
-        try {
-            const data = await getResearchIdeas()
-            setIdeas(data)
-        } catch (error) {
-            toast.error('Failed to load research ideas')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const handleCreate = async () => {
+    const handleCreate = () => {
         if (!title.trim()) {
             toast.error('Please enter a title')
             return
         }
 
-        try {
-            await createResearchIdea({
-                title: title.trim(),
-                notes: notes.trim() || undefined,
-            })
-
-            toast.success('Research idea created!')
-            setTitle('')
-            setNotes('')
-            setDialogOpen(false)
-            await loadIdeas()
-        } catch (error) {
-            toast.error('Failed to create research idea')
-        }
+        createResearchMutation.mutate({
+            title: title.trim(),
+            notes: notes.trim() || undefined,
+        })
+        
+        setTitle('')
+        setNotes('')
+        setDialogOpen(false)
     }
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = (id: string) => {
         if (!confirm('Are you sure you want to delete this idea?')) return
-
-        try {
-            await deleteResearchIdea(id)
-            toast.success('Research idea deleted')
-            await loadIdeas()
-        } catch (error) {
-            toast.error('Failed to delete research idea')
-        }
+        deleteResearchMutation.mutate(id)
     }
 
-    if (loading) {
-        return <div>Loading...</div>
+    // Show skeleton only on initial load
+    if (isLoading) {
+        return <ResearchListSkeleton />
     }
 
     // Group by maturity level

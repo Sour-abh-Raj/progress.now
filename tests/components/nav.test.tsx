@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { DashboardNav } from '@/components/layout/nav'
 import { usePathname } from 'next/navigation'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 // Mock next-themes
 vi.mock('next-themes', () => ({
@@ -11,6 +12,20 @@ vi.mock('next-themes', () => ({
     })),
 }))
 
+// Create a wrapper with QueryClientProvider
+const createWrapper = () => {
+    const queryClient = new QueryClient({
+        defaultOptions: {
+            queries: { retry: false },
+        },
+    })
+    return ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>
+            {children}
+        </QueryClientProvider>
+    )
+}
+
 describe('DashboardNav', () => {
     beforeEach(() => {
         vi.clearAllMocks()
@@ -18,7 +33,7 @@ describe('DashboardNav', () => {
 
     describe('Navigation Items', () => {
         it('renders all navigation items', () => {
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             expect(screen.getAllByText('Dashboard').length).toBeGreaterThan(0)
             expect(screen.getAllByText('TODOs').length).toBeGreaterThan(0)
@@ -28,7 +43,7 @@ describe('DashboardNav', () => {
         })
 
         it('renders the app logo/title', () => {
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             expect(screen.getByText('progress.now')).toBeInTheDocument()
         })
@@ -36,21 +51,21 @@ describe('DashboardNav', () => {
 
     describe('Bottom Navigation', () => {
         it('renders bottom navigation with correct aria attributes', () => {
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             const bottomNav = screen.getByRole('navigation', { name: 'Mobile navigation' })
             expect(bottomNav).toBeInTheDocument()
         })
 
         it('bottom nav has lg:hidden class for <1024px visibility', () => {
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             const bottomNav = screen.getByRole('navigation', { name: 'Mobile navigation' })
             expect(bottomNav).toHaveClass('lg:hidden')
         })
 
         it('bottom nav contains all 5 navigation items', () => {
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             const bottomNav = screen.getByRole('navigation', { name: 'Mobile navigation' })
             const links = bottomNav.querySelectorAll('a')
@@ -58,7 +73,7 @@ describe('DashboardNav', () => {
         })
 
         it('bottom nav items have correct hrefs', () => {
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             const bottomNav = screen.getByRole('navigation', { name: 'Mobile navigation' })
             const links = bottomNav.querySelectorAll('a')
@@ -75,7 +90,7 @@ describe('DashboardNav', () => {
     describe('Active Route Highlighting', () => {
         it('highlights Dashboard when on /dashboard', () => {
             vi.mocked(usePathname).mockReturnValue('/dashboard')
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             const bottomNav = screen.getByRole('navigation', { name: 'Mobile navigation' })
             const dashboardLink = bottomNav.querySelector('a[href="/dashboard"]')
@@ -86,7 +101,7 @@ describe('DashboardNav', () => {
 
         it('highlights TODOs when on /dashboard/todos', () => {
             vi.mocked(usePathname).mockReturnValue('/dashboard/todos')
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             const bottomNav = screen.getByRole('navigation', { name: 'Mobile navigation' })
             const todosLink = bottomNav.querySelector('a[href="/dashboard/todos"]')
@@ -97,7 +112,7 @@ describe('DashboardNav', () => {
 
         it('highlights Projects when on /dashboard/projects', () => {
             vi.mocked(usePathname).mockReturnValue('/dashboard/projects')
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             const bottomNav = screen.getByRole('navigation', { name: 'Mobile navigation' })
             const projectsLink = bottomNav.querySelector('a[href="/dashboard/projects"]')
@@ -108,7 +123,7 @@ describe('DashboardNav', () => {
 
         it('highlights Research when on /dashboard/research', () => {
             vi.mocked(usePathname).mockReturnValue('/dashboard/research')
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             const bottomNav = screen.getByRole('navigation', { name: 'Mobile navigation' })
             const researchLink = bottomNav.querySelector('a[href="/dashboard/research"]')
@@ -119,7 +134,7 @@ describe('DashboardNav', () => {
 
         it('highlights Settings when on /dashboard/settings', () => {
             vi.mocked(usePathname).mockReturnValue('/dashboard/settings')
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             const bottomNav = screen.getByRole('navigation', { name: 'Mobile navigation' })
             const settingsLink = bottomNav.querySelector('a[href="/dashboard/settings"]')
@@ -130,7 +145,7 @@ describe('DashboardNav', () => {
 
         it('non-active items do not have aria-current', () => {
             vi.mocked(usePathname).mockReturnValue('/dashboard')
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             const bottomNav = screen.getByRole('navigation', { name: 'Mobile navigation' })
             const todosLink = bottomNav.querySelector('a[href="/dashboard/todos"]')
@@ -142,7 +157,7 @@ describe('DashboardNav', () => {
 
     describe('Touch Friendliness', () => {
         it('bottom nav items have minimum touch target size', () => {
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             const bottomNav = screen.getByRole('navigation', { name: 'Mobile navigation' })
             const links = bottomNav.querySelectorAll('a')
@@ -155,7 +170,7 @@ describe('DashboardNav', () => {
 
     describe('Desktop Navigation', () => {
         it('desktop nav has lg:flex class for >=1024px visibility', () => {
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             // Find the desktop navigation container
             const desktopNav = document.querySelector('.lg\\:flex.lg\\:space-x-8')
@@ -166,7 +181,7 @@ describe('DashboardNav', () => {
 
     describe('Responsive Breakpoints', () => {
         it('menu button has lg:hidden class', () => {
-            render(<DashboardNav />)
+            render(<DashboardNav />, { wrapper: createWrapper() })
             
             const menuButton = screen.getByRole('button', { name: 'Toggle menu' })
             expect(menuButton).toHaveClass('lg:hidden')

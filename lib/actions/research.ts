@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { getCurrentUser, getCachedResearchIdeas } from '@/lib/data/cached-queries'
 
 export type ResearchIdea = {
     id: string
@@ -15,31 +16,16 @@ export type ResearchIdea = {
 }
 
 export async function getResearchIdeas() {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
-
-    const { data, error } = await supabase
-        .from('research_ideas')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-    if (error) throw new Error(error.message)
-    return data as ResearchIdea[]
+    return getCachedResearchIdeas(user.id)
 }
 
 export async function getResearchIdea(id: string) {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
-
+    
+    const supabase = await createClient()
     const { data, error } = await supabase
         .from('research_ideas')
         .select('*')
@@ -57,12 +43,10 @@ export async function createResearchIdea(formData: {
     tags?: string[]
     maturity_level?: 'idea' | 'exploring' | 'validating' | 'publishing'
 }) {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
+    
+    const supabase = await createClient()
 
     const { data, error } = await supabase
         .from('research_ideas')
@@ -97,12 +81,10 @@ export async function createResearchIdea(formData: {
 }
 
 export async function updateResearchIdea(id: string, updates: Partial<ResearchIdea>) {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
+    
+    const supabase = await createClient()
 
     const { data, error } = await supabase
         .from('research_ideas')
@@ -120,12 +102,10 @@ export async function updateResearchIdea(id: string, updates: Partial<ResearchId
 }
 
 export async function deleteResearchIdea(id: string) {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
+    
+    const supabase = await createClient()
 
     const { error } = await supabase
         .from('research_ideas')

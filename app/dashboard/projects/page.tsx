@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useTransition } from 'react'
 import { getProjects, createProject, deleteProject, type Project } from '@/lib/actions/projects'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,35 +22,37 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { Plus, Trash2 } from 'lucide-react'
+import { ProjectListSkeleton } from '@/components/skeletons/project-skeleton'
 
 export default function ProjectsPage() {
     const [projects, setProjects] = useState<Project[]>([])
     const [loading, setLoading] = useState(true)
     const [dialogOpen, setDialogOpen] = useState(false)
+    const [isPending, startTransition] = useTransition()
 
     // Form state
     const [title, setTitle] = useState('')
     const [description, setDescription] = useState('')
     const [status, setStatus] = useState<'planned' | 'ongoing' | 'completed'>('planned')
 
-    useEffect(() => {
-        loadProjects()
-    }, [])
-
-    const loadProjects = async () => {
+    const loadProjects = useCallback(async () => {
         try {
             const data = await getProjects()
             setProjects(data)
-        } catch (error) {
+        } catch {
             toast.error('Failed to load projects')
         } finally {
             setLoading(false)
         }
-    }
+    }, [])
+
+    useEffect(() => {
+        loadProjects()
+    }, [loadProjects])
 
     const handleCreate = async () => {
         if (!title.trim()) {
@@ -58,38 +60,73 @@ export default function ProjectsPage() {
             return
         }
 
-        try {
-            await createProject({
-                title: title.trim(),
-                description: description.trim() || undefined,
-                status,
-            })
-
-            toast.success('Project created!')
-            setTitle('')
-            setDescription('')
-            setStatus('planned')
-            setDialogOpen(false)
-            await loadProjects()
-        } catch (error) {
-            toast.error('Failed to create project')
+        const trimmedTitle = title.trim()
+        const trimmedDescription = description.trim()
+        
+        // Optimistic update: add project immediately
+        const optimisticProject: Project = {
+            id: `temp-${Date.now()}`,
+            user_id: '',
+            title: trimmedTitle,
+            description: trimmedDescription || null,
+            status,
+            start_date: null,
+            end_date: null,
+            tags: null,
+            xp_reward: 100,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
         }
+        
+        setProjects(prev => [optimisticProject, ...prev])
+        setTitle('')
+        setDescription('')
+        setStatus('planned')
+        setDialogOpen(false)
+        toast.success('Project created!')
+
+        startTransition(async () => {
+            try {
+                const newProject = await createProject({
+                    title: trimmedTitle,
+                    description: trimmedDescription || undefined,
+                    status,
+                })
+                // Replace optimistic project with real one
+                setProjects(prev => prev.map(p => 
+                    p.id === optimisticProject.id ? newProject : p
+                ))
+            } catch {
+                // Revert optimistic update on error
+                setProjects(prev => prev.filter(p => p.id !== optimisticProject.id))
+                toast.error('Failed to create project')
+            }
+        })
     }
 
     const handleDelete = async (id: string) => {
         if (!confirm('Are you sure you want to delete this project?')) return
 
-        try {
-            await deleteProject(id)
-            toast.success('Project deleted')
-            await loadProjects()
-        } catch (error) {
-            toast.error('Failed to delete project')
-        }
+        // Optimistic update: remove immediately
+        const deletedProject = projects.find(p => p.id === id)
+        setProjects(prev => prev.filter(p => p.id !== id))
+        toast.success('Project deleted')
+
+        startTransition(async () => {
+            try {
+                await deleteProject(id)
+            } catch {
+                // Revert optimistic update on error
+                if (deletedProject) {
+                    setProjects(prev => [...prev, deletedProject])
+                }
+                toast.error('Failed to delete project')
+            }
+        })
     }
 
     if (loading) {
-        return <div>Loading...</div>
+        return <ProjectListSkeleton count={6} />
     }
 
     return (

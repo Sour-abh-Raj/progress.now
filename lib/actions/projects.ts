@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { calculateProjectXP, calculateLevel } from '@/lib/gamification/xp-calculator'
 import { updateStreak } from '@/lib/gamification/streak-tracker'
+import { getCurrentUser, getCachedProjects } from '@/lib/data/cached-queries'
 
 export type Project = {
     id: string
@@ -20,31 +21,16 @@ export type Project = {
 }
 
 export async function getProjects() {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
-
-    const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-    if (error) throw new Error(error.message)
-    return data as Project[]
+    return getCachedProjects(user.id)
 }
 
 export async function getProject(id: string) {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
-
+    
+    const supabase = await createClient()
     const { data, error } = await supabase
         .from('projects')
         .select('*')
@@ -65,12 +51,10 @@ export async function createProject(formData: {
     tags?: string[]
     xp_reward?: number
 }) {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
+    
+    const supabase = await createClient()
 
     const { data, error } = await supabase
         .from('projects')
@@ -97,12 +81,10 @@ export async function createProject(formData: {
 }
 
 export async function updateProject(id: string, updates: Partial<Project>) {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
+    
+    const supabase = await createClient()
 
     // Get current project to check if status changed to completed
     const { data: currentProject } = await supabase
@@ -172,12 +154,10 @@ export async function updateProject(id: string, updates: Partial<Project>) {
 }
 
 export async function deleteProject(id: string) {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
+    const user = await getCurrentUser()
     if (!user) throw new Error('Not authenticated')
+    
+    const supabase = await createClient()
 
     const { error } = await supabase
         .from('projects')

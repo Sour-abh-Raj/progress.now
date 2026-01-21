@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useTransition } from 'react'
 import { getTodos, createTodo, toggleTodoComplete, deleteTodo, type Todo } from '@/lib/actions/todos'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,32 +26,35 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { Plus, Trash2, Calendar } from 'lucide-react'
+import { TodoListSkeleton } from '@/components/skeletons/todo-skeleton'
+import { calculateTaskXP } from '@/lib/gamification/xp-calculator'
 
 export default function TodosPage() {
     const [todos, setTodos] = useState<Todo[]>([])
     const [loading, setLoading] = useState(true)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [filter, setFilter] = useState<'all' | 'today' | 'week' | 'completed'>('all')
+    const [isPending, startTransition] = useTransition()
 
     // Form state
     const [title, setTitle] = useState('')
     const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
     const [dueDate, setDueDate] = useState('')
 
-    useEffect(() => {
-        loadTodos()
-    }, [])
-
-    const loadTodos = async () => {
+    const loadTodos = useCallback(async () => {
         try {
             const data = await getTodos()
             setTodos(data)
-        } catch (error) {
+        } catch {
             toast.error('Failed to load todos')
         } finally {
             setLoading(false)
         }
-    }
+    }, [])
+
+    useEffect(() => {
+        loadTodos()
+    }, [loadTodos])
 
     const handleCreate = async () => {
         if (!title.trim()) {
@@ -59,44 +62,97 @@ export default function TodosPage() {
             return
         }
 
-        try {
-            await createTodo({
-                title: title.trim(),
-                priority,
-                due_date: dueDate || undefined,
-            })
-
-            toast.success('Todo created!')
-            setTitle('')
-            setPriority('medium')
-            setDueDate('')
-            setDialogOpen(false)
-            await loadTodos()
-        } catch (error) {
-            toast.error('Failed to create todo')
+        const trimmedTitle = title.trim()
+        const xpReward = calculateTaskXP(priority)
+        
+        // Optimistic update: add todo immediately
+        const optimisticTodo: Todo = {
+            id: `temp-${Date.now()}`,
+            user_id: '',
+            title: trimmedTitle,
+            priority,
+            due_date: dueDate || null,
+            completed: false,
+            recurring: false,
+            xp_reward: xpReward,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            completed_at: null,
         }
+        
+        setTodos(prev => [optimisticTodo, ...prev])
+        setTitle('')
+        setPriority('medium')
+        setDueDate('')
+        setDialogOpen(false)
+        toast.success('Todo created!')
+
+        startTransition(async () => {
+            try {
+                const newTodo = await createTodo({
+                    title: trimmedTitle,
+                    priority,
+                    due_date: dueDate || undefined,
+                })
+                // Replace optimistic todo with real one
+                setTodos(prev => prev.map(t => 
+                    t.id === optimisticTodo.id ? newTodo : t
+                ))
+            } catch {
+                // Revert optimistic update on error
+                setTodos(prev => prev.filter(t => t.id !== optimisticTodo.id))
+                toast.error('Failed to create todo')
+            }
+        })
     }
 
     const handleToggle = async (id: string) => {
-        try {
-            await toggleTodoComplete(id)
-            await loadTodos()
-            toast.success('Todo updated!')
-        } catch (error) {
-            toast.error('Failed to update todo')
-        }
+        const todo = todos.find(t => t.id === id)
+        if (!todo) return
+
+        // Optimistic update: toggle immediately
+        const newCompleted = !todo.completed
+        setTodos(prev => prev.map(t => 
+            t.id === id 
+                ? { ...t, completed: newCompleted, completed_at: newCompleted ? new Date().toISOString() : null }
+                : t
+        ))
+        toast.success(newCompleted ? 'Todo completed! 🎉' : 'Todo uncompleted')
+
+        startTransition(async () => {
+            try {
+                await toggleTodoComplete(id)
+            } catch {
+                // Revert optimistic update on error
+                setTodos(prev => prev.map(t => 
+                    t.id === id 
+                        ? { ...t, completed: !newCompleted, completed_at: !newCompleted ? new Date().toISOString() : null }
+                        : t
+                ))
+                toast.error('Failed to update todo')
+            }
+        })
     }
 
     const handleDelete = async (id: string) => {
         if (!confirm('Are you sure you want to delete this todo?')) return
 
-        try {
-            await deleteTodo(id)
-            toast.success('Todo deleted')
-            await loadTodos()
-        } catch (error) {
-            toast.error('Failed to delete todo')
-        }
+        // Optimistic update: remove immediately
+        const deletedTodo = todos.find(t => t.id === id)
+        setTodos(prev => prev.filter(t => t.id !== id))
+        toast.success('Todo deleted')
+
+        startTransition(async () => {
+            try {
+                await deleteTodo(id)
+            } catch {
+                // Revert optimistic update on error
+                if (deletedTodo) {
+                    setTodos(prev => [...prev, deletedTodo])
+                }
+                toast.error('Failed to delete todo')
+            }
+        })
     }
 
     const filteredTodos = todos.filter((todo) => {
@@ -121,7 +177,7 @@ export default function TodosPage() {
     })
 
     if (loading) {
-        return <div>Loading...</div>
+        return <TodoListSkeleton count={5} />
     }
 
     return (

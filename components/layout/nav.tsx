@@ -51,7 +51,7 @@ export function DashboardNav() {
 
     return (
         <>
-            {/* Desktop & Tablet Navigation */}
+            {/* Desktop Navigation (>=1024px) */}
             <nav className="border-b bg-background">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div className="flex h-16 justify-between">
@@ -61,8 +61,8 @@ export function DashboardNav() {
                                     progress.now
                                 </Link>
                             </div>
-                            {/* Desktop Navigation */}
-                            <div className="hidden md:ml-8 md:flex md:space-x-8">
+                            {/* Desktop Navigation - visible only on lg screens and above */}
+                            <div className="hidden lg:ml-8 lg:flex lg:space-x-8">
                                 {navigation.map((item) => {
                                     const isActive = pathname === item.href
                                     const Icon = item.icon
@@ -93,12 +93,12 @@ export function DashboardNav() {
                                 <LogOut className="h-4 w-4" />
                                 <span className="sr-only">Logout</span>
                             </Button>
-                            {/* Mobile Menu Button */}
+                            {/* Mobile/Tablet Menu Button - visible below lg breakpoint */}
                             <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                                className="md:hidden"
+                                className="lg:hidden"
                             >
                                 {mobileMenuOpen ? (
                                     <X className="h-5 w-5" />
@@ -111,9 +111,9 @@ export function DashboardNav() {
                     </div>
                 </div>
 
-                {/* Mobile Slide-Down Menu */}
+                {/* Mobile/Tablet Slide-Down Menu - visible below lg breakpoint */}
                 {mobileMenuOpen && (
-                    <div className="md:hidden border-t">
+                    <div className="lg:hidden border-t">
                         <div className="space-y-1 px-4 pb-3 pt-2">
                             {navigation.map((item) => {
                                 const isActive = pathname === item.href
@@ -148,8 +148,12 @@ export function DashboardNav() {
                 )}
             </nav>
 
-            {/* Mobile Bottom Navigation */}
-            <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background md:hidden safe-area-bottom">
+            {/* Mobile/Tablet Bottom Navigation - visible below lg breakpoint (<1024px) */}
+            <nav 
+                className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background lg:hidden safe-area-bottom"
+                role="navigation"
+                aria-label="Mobile navigation"
+            >
                 <div className="grid grid-cols-5 h-16">
                     {navigation.map((item) => {
                         const isActive = pathname === item.href
@@ -158,24 +162,26 @@ export function DashboardNav() {
                             <Link
                                 key={item.name}
                                 href={item.href}
-                                className={`flex flex-col items-center justify-center gap-1 transition-colors ${isActive
+                                aria-current={isActive ? 'page' : undefined}
+                                className={`flex flex-col items-center justify-center gap-1 transition-colors min-h-[44px] ${isActive
                                         ? 'text-primary'
-                                        : 'text-muted-foreground hover:text-foreground'
+                                        : 'text-muted-foreground hover:text-foreground active:text-foreground'
                                     }`}
                             >
                                 <Icon className="h-5 w-5" />
-                                <span className="text-xs font-medium">{item.name}</span>
+                                <span className="text-xs font-medium truncate max-w-full px-1">{item.name}</span>
                             </Link>
                         )
                     })}
                 </div>
             </nav>
 
-            {/* Mobile Menu Backdrop */}
+            {/* Mobile/Tablet Menu Backdrop - visible below lg breakpoint */}
             {mobileMenuOpen && (
                 <div
-                    className="fixed inset-0 z-40 bg-black/20 md:hidden"
+                    className="fixed inset-0 z-40 bg-black/20 lg:hidden"
                     onClick={closeMobileMenu}
+                    aria-hidden="true"
                 />
             )}
         </>

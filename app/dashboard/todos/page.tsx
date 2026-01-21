@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useTransition } from 'react'
-import { getTodos, createTodo, toggleTodoComplete, deleteTodo, type Todo } from '@/lib/actions/todos'
+import { useState } from 'react'
+import { type Todo } from '@/lib/actions/todos'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,135 +27,50 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { Plus, Trash2, Calendar } from 'lucide-react'
 import { TodoListSkeleton } from '@/components/skeletons/todo-skeleton'
-import { calculateTaskXP } from '@/lib/gamification/xp-calculator'
+import { useTodos, useCreateTodo, useToggleTodo, useDeleteTodo } from '@/lib/hooks/use-todos'
 
 export default function TodosPage() {
-    const [todos, setTodos] = useState<Todo[]>([])
-    const [loading, setLoading] = useState(true)
+    const { data: todos = [], isLoading, isFetching } = useTodos()
+    const createTodoMutation = useCreateTodo()
+    const toggleTodoMutation = useToggleTodo()
+    const deleteTodoMutation = useDeleteTodo()
+    
     const [dialogOpen, setDialogOpen] = useState(false)
     const [filter, setFilter] = useState<'all' | 'today' | 'week' | 'completed'>('all')
-    const [isPending, startTransition] = useTransition()
 
     // Form state
     const [title, setTitle] = useState('')
     const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
     const [dueDate, setDueDate] = useState('')
 
-    const loadTodos = useCallback(async () => {
-        try {
-            const data = await getTodos()
-            setTodos(data)
-        } catch {
-            toast.error('Failed to load todos')
-        } finally {
-            setLoading(false)
-        }
-    }, [])
-
-    useEffect(() => {
-        loadTodos()
-    }, [loadTodos])
-
-    const handleCreate = async () => {
+    const handleCreate = () => {
         if (!title.trim()) {
             toast.error('Please enter a title')
             return
         }
 
-        const trimmedTitle = title.trim()
-        const xpReward = calculateTaskXP(priority)
-        
-        // Optimistic update: add todo immediately
-        const optimisticTodo: Todo = {
-            id: `temp-${Date.now()}`,
-            user_id: '',
-            title: trimmedTitle,
+        createTodoMutation.mutate({
+            title: title.trim(),
             priority,
-            due_date: dueDate || null,
-            completed: false,
-            recurring: false,
-            xp_reward: xpReward,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            completed_at: null,
-        }
+            due_date: dueDate || undefined,
+        })
         
-        setTodos(prev => [optimisticTodo, ...prev])
         setTitle('')
         setPriority('medium')
         setDueDate('')
         setDialogOpen(false)
-        toast.success('Todo created!')
-
-        startTransition(async () => {
-            try {
-                const newTodo = await createTodo({
-                    title: trimmedTitle,
-                    priority,
-                    due_date: dueDate || undefined,
-                })
-                // Replace optimistic todo with real one
-                setTodos(prev => prev.map(t => 
-                    t.id === optimisticTodo.id ? newTodo : t
-                ))
-            } catch {
-                // Revert optimistic update on error
-                setTodos(prev => prev.filter(t => t.id !== optimisticTodo.id))
-                toast.error('Failed to create todo')
-            }
-        })
     }
 
-    const handleToggle = async (id: string) => {
-        const todo = todos.find(t => t.id === id)
-        if (!todo) return
-
-        // Optimistic update: toggle immediately
-        const newCompleted = !todo.completed
-        setTodos(prev => prev.map(t => 
-            t.id === id 
-                ? { ...t, completed: newCompleted, completed_at: newCompleted ? new Date().toISOString() : null }
-                : t
-        ))
-        toast.success(newCompleted ? 'Todo completed! 🎉' : 'Todo uncompleted')
-
-        startTransition(async () => {
-            try {
-                await toggleTodoComplete(id)
-            } catch {
-                // Revert optimistic update on error
-                setTodos(prev => prev.map(t => 
-                    t.id === id 
-                        ? { ...t, completed: !newCompleted, completed_at: !newCompleted ? new Date().toISOString() : null }
-                        : t
-                ))
-                toast.error('Failed to update todo')
-            }
-        })
+    const handleToggle = (id: string) => {
+        toggleTodoMutation.mutate(id)
     }
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = (id: string) => {
         if (!confirm('Are you sure you want to delete this todo?')) return
-
-        // Optimistic update: remove immediately
-        const deletedTodo = todos.find(t => t.id === id)
-        setTodos(prev => prev.filter(t => t.id !== id))
-        toast.success('Todo deleted')
-
-        startTransition(async () => {
-            try {
-                await deleteTodo(id)
-            } catch {
-                // Revert optimistic update on error
-                if (deletedTodo) {
-                    setTodos(prev => [...prev, deletedTodo])
-                }
-                toast.error('Failed to delete todo')
-            }
-        })
+        deleteTodoMutation.mutate(id)
     }
 
-    const filteredTodos = todos.filter((todo) => {
+    const filteredTodos = todos.filter((todo: Todo) => {
         const today = new Date().toISOString().split('T')[0]
         const weekFromNow = new Date()
         weekFromNow.setDate(weekFromNow.getDate() + 7)
@@ -176,7 +91,8 @@ export default function TodosPage() {
         }
     })
 
-    if (loading) {
+    // Show skeleton only on initial load, not on background refetch
+    if (isLoading) {
         return <TodoListSkeleton count={5} />
     }
 

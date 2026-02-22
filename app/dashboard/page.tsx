@@ -3,9 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { getProgressToNextLevel } from '@/lib/gamification/xp-calculator'
-import { calculateWeeklyScore } from '@/lib/gamification/streak-tracker'
 import { Trophy, Flame, CheckCircle2, Target } from 'lucide-react'
-import { getCurrentUser, getGamificationStats, getCachedTodos, getCachedProjects } from '@/lib/data/cached-queries'
+import {
+    getCurrentUser,
+    getGamificationStats,
+    getDashboardMetrics,
+    getCachedTodosDueToday,
+} from '@/lib/data/cached-queries'
 
 export default async function DashboardPage() {
     const user = await getCurrentUser()
@@ -14,42 +18,33 @@ export default async function DashboardPage() {
         redirect('/auth/login')
     }
 
-    // Fetch data using cached queries (deduplicates within request)
-    const [stats, todos, projects] = await Promise.all([
+    // Fetch all dashboard data in parallel with minimal payloads
+    const [stats, dashboardMetrics, todosToday] = await Promise.all([
         getGamificationStats(user.id),
-        getCachedTodos(user.id),
-        getCachedProjects(user.id),
+        getDashboardMetrics(user.id),
+        getCachedTodosDueToday(user.id),
     ])
 
-    // Calculate stats
-    const todosToday = todos.filter((t) => {
-        if (!t.due_date) return false
-        return t.due_date === new Date().toISOString().split('T')[0]
-    })
-    const completedToday = todosToday.filter((t) => t.completed)
-
-    const ongoingProjects = projects.filter((p) => p.status === 'ongoing')
-    const completedProjects = projects.filter((p) => p.status === 'completed')
+    const completedTodayCount = dashboardMetrics.todosCompletedTodayCount
+    const totalTodayCount = dashboardMetrics.todosTodayCount
+    const totalProjectCount =
+        dashboardMetrics.ongoingProjectsCount + dashboardMetrics.completedProjectsCount
 
     const levelProgress = stats
         ? getProgressToNextLevel(stats.total_xp, stats.level)
         : { current: 0, required: 100, percentage: 0 }
 
-    const weeklyScore = stats ? await calculateWeeklyScore(user.id) : 0
-
     return (
         <div className="space-y-8">
-            {/* Hero Section */}
             <div>
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight">
                     Welcome back! 👋
                 </h1>
                 <p className="text-muted-foreground mt-2 text-sm sm:text-base">
-                    Here's your productivity overview
+                    Here&apos;s your productivity overview
                 </p>
             </div>
 
-            {/* Stats Grid - Single column on mobile, 2 cols on tablet, 4 on desktop */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -88,10 +83,10 @@ export default async function DashboardPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">
-                            {completedToday.length}/{todosToday.length}
+                            {completedTodayCount}/{totalTodayCount}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            {todosToday.length - completedToday.length} remaining
+                            {totalTodayCount - completedTodayCount} remaining
                         </p>
                     </CardContent>
                 </Card>
@@ -102,13 +97,12 @@ export default async function DashboardPage() {
                         <Target className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{weeklyScore}/100</div>
-                        <Progress value={weeklyScore} className="mt-2" />
+                        <div className="text-2xl font-bold">{dashboardMetrics.weeklyScore}/100</div>
+                        <Progress value={dashboardMetrics.weeklyScore} className="mt-2" />
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Projects Overview */}
             <Card>
                 <CardHeader>
                     <CardTitle>Projects Overview</CardTitle>
@@ -120,24 +114,23 @@ export default async function DashboardPage() {
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
                             <span className="text-sm font-medium">Ongoing</span>
-                            <Badge variant="secondary">{ongoingProjects.length}</Badge>
+                            <Badge variant="secondary">{dashboardMetrics.ongoingProjectsCount}</Badge>
                         </div>
                         <div className="flex items-center justify-between">
                             <span className="text-sm font-medium">Completed</span>
-                            <Badge variant="default">{completedProjects.length}</Badge>
+                            <Badge variant="default">{dashboardMetrics.completedProjectsCount}</Badge>
                         </div>
                         <div className="flex items-center justify-between">
                             <span className="text-sm font-medium">Total</span>
-                            <Badge variant="outline">{projects.length}</Badge>
+                            <Badge variant="outline">{totalProjectCount}</Badge>
                         </div>
                     </div>
                 </CardContent>
             </Card>
 
-            {/* Today's Tasks */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Today's Tasks</CardTitle>
+                    <CardTitle>Today&apos;s Tasks</CardTitle>
                     <CardDescription>
                         {todosToday.length > 0 ? 'Complete these tasks to earn XP' : 'No tasks due today'}
                     </CardDescription>

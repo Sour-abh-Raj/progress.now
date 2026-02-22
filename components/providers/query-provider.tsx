@@ -16,7 +16,9 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
                         // Retry failed requests once
                         retry: 1,
                         // Refetch on window focus for fresh data
-                        refetchOnWindowFocus: true,
+                        refetchOnWindowFocus: false,
+                        // Avoid surprise network churn when reconnecting from flaky networks
+                        refetchOnReconnect: true,
                         // Don't refetch on mount if data is fresh
                         refetchOnMount: false,
                     },

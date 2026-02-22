@@ -89,7 +89,10 @@ export function useToggleTodo() {
 
             return { previousTodos, wasCompleted: todo?.completed }
         },
-        onSuccess: (_, __, context) => {
+        onSuccess: (updatedTodo, _, context) => {
+            queryClient.setQueryData<Todo[]>(TODOS_QUERY_KEY, (old) =>
+                old?.map((todo) => (todo.id === updatedTodo.id ? updatedTodo : todo)) ?? []
+            )
             toast.success(context?.wasCompleted ? 'Todo uncompleted' : 'Todo completed! 🎉')
         },
         onError: (_, __, context) => {
@@ -97,10 +100,6 @@ export function useToggleTodo() {
                 queryClient.setQueryData(TODOS_QUERY_KEY, context.previousTodos)
             }
             toast.error('Failed to update todo')
-        },
-        onSettled: () => {
-            // Refetch to ensure consistency
-            queryClient.invalidateQueries({ queryKey: TODOS_QUERY_KEY })
         },
     })
 }
